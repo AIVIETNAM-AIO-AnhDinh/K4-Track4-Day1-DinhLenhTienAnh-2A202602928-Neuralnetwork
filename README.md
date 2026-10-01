@@ -72,22 +72,55 @@ Phần mềm: Python 3.10+, PyTorch ≥ 2.x, scikit-learn, numpy, pandas, matplo
 
 ## 6. Sản phẩm phải nộp
 
-Đặt trong thư mục `submission_<MSSV>/` và nộp theo kênh giảng viên thông báo (nén `.zip` nếu nộp qua LMS):
+Nộp **một thư mục `submission_<MSSV>/`** (thay `<MSSV>` bằng mã số sinh viên của bạn), nén thành `submission_<MSSV>.zip` nếu nộp qua LMS, theo kênh giảng viên thông báo.
+
+### 6.1 Cây thư mục
 
 ```
 submission_<MSSV>/
-├── code/
-│   ├── lab.ipynb              # notebook chạy được từ đầu đến cuối (có output)
-│   └── *.py                   # (tuỳ chọn) module: model, train...
-├── experiments.xlsx           # bảng so sánh (dựa trên templates/experiment_table_template.xlsx)
+├── REPORT.md
+├── experiments.xlsx
 ├── figures/
-│   ├── <exp_id>.png           # MỖI thí nghiệm một ảnh: train/val loss, val accuracy, grad_norm
-│   └── compare_<nhóm>.png     # (nên có) ảnh chồng các đường của một nhóm thí nghiệm
-├── results/                   # (khuyến nghị) JSON/CSV lịch sử từng lần chạy
-└── REPORT.md                  # báo cáo kết luận (dựa trên templates/REPORT_TEMPLATE.md)
+│   ├── <exp_id>.png            (một ảnh cho MỖI thí nghiệm trong bảng)
+│   └── compare_<nhóm>.png      (nên có, mỗi nhóm thí nghiệm một ảnh)
+├── results/                    (khuyến nghị, không bắt buộc)
+│   └── <exp_id>.json
+└── code/                       (TOÀN BỘ code nằm ở đây)
+    ├── lab.ipynb
+    ├── *.py                    (tuỳ chọn)
+    └── requirements.txt        (tuỳ chọn)
 ```
 
-Số thí nghiệm là **tuỳ bạn**; mỗi thí nghiệm bạn đưa vào bảng phải có ảnh riêng, đặt tên theo `exp_id`, thấy rõ trục và chú thích. Ảnh có thể lưu bằng `plt.savefig` hoặc là ảnh chụp màn hình TensorBoard/W&B.
+### 6.2 Chi tiết từng file / thư mục
+
+| Đường dẫn | Bắt buộc? | Nội dung và yêu cầu |
+|---|---|---|
+| `REPORT.md` | **Bắt buộc** | Báo cáo kết luận, viết theo [`templates/REPORT_TEMPLATE.md`](templates/REPORT_TEMPLATE.md), khoảng 4 trang. Gồm: thiết lập, kiểm tra ban đầu và độ nhiễu, kết quả theo từng chủ đề đã thử (dự đoán, số liệu trỏ về `exp_id`, ảnh, giải thích cơ chế), cấu hình cuối cùng (nếu có), trả lời câu hỏi dẫn dắt, hạn chế. Chèn ảnh bằng đường dẫn tương đối, ví dụ `![](figures/compare_optimizer.png)`. Chỉ viết cho các chủ đề bạn đã thử. |
+| `experiments.xlsx` | **Bắt buộc** | Bảng so sánh, tạo từ [`templates/experiment_table_template.xlsx`](templates/experiment_table_template.xlsx). Giữ nguyên 4 sheet `Legend`, `Experiments`, `Seeds`, `Summary` và không đổi tên cột. **Mỗi thí nghiệm đã chạy là một dòng** trong sheet `Experiments`, với `exp_id` duy nhất. Điền đủ cấu hình và kết quả (hoặc ghi lý do thiếu vào `notes`). Cột `test_acc` / `test_macro_f1` chỉ điền cho baseline và cấu hình cuối cùng. Sheet `Seeds` ghi các lần chạy baseline khác seed. Không để ô công thức lỗi. |
+| `figures/` | **Bắt buộc** | Thư mục chứa ảnh biểu đồ, định dạng `.png`. |
+| `figures/<exp_id>.png` | **Bắt buộc, một ảnh cho mỗi dòng của bảng** | Tên file **trùng đúng** `exp_id` trong bảng (ví dụ `base-s1.png`, `opt-adam-lr1e-3.png`). Mỗi ảnh có ít nhất 3 ô: (1) train loss và val loss theo epoch, (2) val accuracy (nên có thêm macro-F1), (3) `grad_norm` (đo trước khi clip). Có tiêu đề ghi `exp_id` và cấu hình, nhãn trục, chú thích. Là ảnh lưu từ `plt.savefig` hoặc ảnh chụp màn hình TensorBoard/W&B đều được. Tên file ghi vào cột `figure_file` của bảng. Số ảnh phải bằng số dòng của bảng. |
+| `figures/compare_<nhóm>.png` | Nên có | Ảnh chồng các đường của nhiều thí nghiệm cùng một nhóm (ví dụ `compare_optimizer.png`, `compare_dropout.png`) để so sánh trực tiếp. Dùng làm bằng chứng trong báo cáo. |
+| `results/` và `results/<exp_id>.json` | Khuyến nghị | Lịch sử của từng lần chạy (mỗi epoch: train/val loss, val acc, macro-F1, grad_norm, thời gian; cùng cấu hình `cfg`). Giúp tạo lại bảng và ảnh mà không cần huấn luyện lại. Một file cho mỗi `exp_id`. |
+| `code/` | **Bắt buộc** | **Toàn bộ code của bạn nằm trong thư mục này**, không để file code ở nơi khác. |
+| `code/lab.ipynb` | **Bắt buộc** | Notebook duy nhất chạy được từ đầu đến cuối (*Restart & Run All*) trên Colab hoặc Kaggle, **giữ nguyên output** của các ô. Gồm theo thứ tự: tải và chia dữ liệu; định nghĩa model (có `assert` số tham số); các phép thử ban đầu (loss bước 0, quá khớp 20 mẫu, gradient chảy); `run_experiment(cfg)`; baseline; các thí nghiệm bạn chọn (mỗi thí nghiệm có dự đoán trước và nhận xét sau); đoạn code tạo bảng và ảnh. Đường dẫn lưu kết quả phải đúng khi chạy từ trong `code/`, tức là ghi vào `../figures/` và `../results/`. Đặt seed cố định. |
+| `code/*.py` | Tuỳ chọn | Nếu bạn tách code ra module (ví dụ `model.py`, `train.py`, `utils.py`), đặt tất cả trong `code/` và `lab.ipynb` import từ đó. Không bắt buộc, nhưng nếu có thì notebook vẫn phải chạy được khi chỉ có thư mục nộp. |
+| `code/requirements.txt` | Tuỳ chọn | Liệt kê thư viện và phiên bản nếu bạn dùng thư viện ngoài những cái có sẵn trên Colab/Kaggle. |
+
+### 6.3 Không nộp
+
+- Dữ liệu CoverType (tập này tải lại được bằng `fetch_covtype`) và thư mục cache của sklearn.
+- File trọng số mô hình (`.pt`, `.pth`, `.ckpt`).
+- `__pycache__/`, `.ipynb_checkpoints/`, `.DS_Store`.
+- Bản sao slide, file PDF, hay ảnh nằm ngoài `figures/`.
+- Code đặt ngoài thư mục `code/`.
+
+### 6.4 Kiểm tra nhanh trước khi nộp
+
+- [ ] Tên thư mục là `submission_<MSSV>` và có đủ `REPORT.md`, `experiments.xlsx`, `figures/`, `code/lab.ipynb`.
+- [ ] Số ảnh `figures/<exp_id>.png` bằng số dòng thí nghiệm trong `experiments.xlsx`, và tên ảnh trùng `exp_id`.
+- [ ] Mọi file `.py` và notebook đều nằm trong `code/`.
+- [ ] Mở `code/lab.ipynb` trên Colab/Kaggle, chọn *Restart & Run All* không lỗi, output còn nguyên.
+- [ ] Mọi con số trong `REPORT.md` tìm lại được trong `experiments.xlsx`.
 
 ## 7. Các file trong thư mục này
 

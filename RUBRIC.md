@@ -77,7 +77,7 @@ Chấm trên các thí nghiệm bạn đã chạy:
 |---|---|
 | Notebook chạy lại được từ đầu đến cuối (Restart & Run All), seed cố định, có output | 5 |
 | Code có cấu trúc (một `run_experiment`, model tách riêng), chú thích chỗ khó | 2 |
-| Thư mục nộp đúng cấu trúc README mục 6 (có `results/` là điểm cộng nhỏ, không bắt buộc) | 2 |
+| Nộp đúng cấu trúc README mục 6: đủ `REPORT.md`, `experiments.xlsx`, `figures/`, `code/lab.ipynb`; **toàn bộ code nằm trong `code/`**; tên ảnh trùng `exp_id`; không nộp dữ liệu/checkpoint (có `results/` là điểm cộng nhỏ, không bắt buộc) | 2 |
 
 ---
 
@@ -110,3 +110,4 @@ Chấm trên các thí nghiệm bạn đã chạy:
 - [ ] Test chỉ ở baseline và cấu hình cuối cùng
 - [ ] Báo cáo: mỗi câu "A hơn B" có số, ảnh, cơ chế và nhắc nhiễu seed
 - [ ] Notebook chạy lại từ đầu không lỗi
+- [ ] Đủ file theo README mục 6.2; code nằm hết trong `code/`; không có dữ liệu, `.pt`, `__pycache__`

@@ -106,7 +106,7 @@ Trong mỗi epoch ghi lại:
 - Epoch có `val_loss` thấp nhất ("best epoch"); báo cáo metric ở epoch đó (hoạt động như dừng sớm, slide Chương 4).
 - Cờ `diverged` nếu loss thành `NaN/inf`: dừng sớm và ghi lại, đừng để notebook treo.
 
-Sau **mỗi** lần chạy, ghi lịch sử ra `results/<exp_id>.json` và lưu ảnh `figures/<exp_id>.png`. Colab/Kaggle có thể ngắt kết nối; nếu kết quả đã nằm trên Drive hay `/kaggle/working` thì bạn không phải chạy lại.
+Sau **mỗi** lần chạy, ghi lịch sử ra `results/<exp_id>.json` và lưu ảnh `figures/<exp_id>.png`. Vì notebook nằm trong `code/`, đường dẫn ghi là `../results/` và `../figures/` (xem README mục 6). Colab/Kaggle có thể ngắt kết nối; nếu kết quả đã nằm trên Drive hay `/kaggle/working` thì bạn không phải chạy lại.
 
 Ảnh `figures/<exp_id>.png` gồm ít nhất 3 ô: (1) train và val loss theo epoch, (2) val accuracy (và macro-F1 nếu được), (3) `grad_norm`. Có tiêu đề ghi `exp_id` và cấu hình, có chú thích, có nhãn trục.
 
@@ -234,7 +234,7 @@ Không chấp nhận: "Adam tốt hơn." (không có số, không so với nhi�
 
 ### 4d. Đóng gói
 - Notebook phải **chạy lại được từ đầu đến cuối** (Restart & Run All) trên Colab/Kaggle. Seed cố định. Output còn lại trong file.
-- Cấu trúc thư mục nộp đúng như README, mục 6.
+- Cấu trúc thư mục nộp đúng như README, mục 6 (danh sách chi tiết từng file). **Mọi code nằm trong `code/`.**
 
 **Tự kiểm tra Part 4:**
 - [ ] `experiments.xlsx` mở được, không có ô công thức lỗi, các dòng đã điền đủ cột (hoặc ghi lý do thiếu ở `notes`).
