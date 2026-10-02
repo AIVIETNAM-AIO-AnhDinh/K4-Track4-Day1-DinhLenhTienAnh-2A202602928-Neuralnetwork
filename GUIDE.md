@@ -4,7 +4,7 @@
 
 **Số lượng thí nghiệm là tuỳ bạn.** Part 3 là *menu gợi ý*, không phải danh sách bắt buộc. Điểm dựa vào chất lượng thiết kế thí nghiệm, độ phủ chủ đề và chất lượng kết luận (xem RUBRIC), không dựa vào việc chạy cho đủ N lần.
 
-**Về các con số "kỳ vọng":** giảng viên *không* chạy sẵn đáp án, nên guide **không** hứa con số accuracy nào. Chỉ có các mốc sau là chắc chắn đúng về mặt toán/dữ liệu: loss bước 0 ≈ ln 7 ≈ 1,946; "đoán luôn lớp 2" cho accuracy 48,8%. Mọi thứ khác bạn tự đo.
+**Về các con số tham chiếu:** những mốc sau chắc chắn đúng về mặt toán/dữ liệu: loss bước 0 ≈ ln 7 ≈ 1,946; "đoán luôn lớp 1 (nhãn gốc 2)" cho accuracy 0,4876 và macro-F1 chỉ ≈ 0,094 trên eval. Ngoài ra giảng viên đã chạy vài lần tham chiếu (1 seed, 1 máy) để đặt mức điểm eval, xem mục *Cách đánh giá* bên dưới. Đó là mốc để bạn biết mình đang ở đâu, không phải đáp án.
 
 ---
 
@@ -43,24 +43,86 @@ Quy tắc:
 
 ---
 
-## Part 0 — Chuẩn bị
+## Cách đánh giá (evaluation)
 
-1. Bật GPU, in ra `torch.__version__` và `torch.cuda.get_device_name(0)`.
-2. Viết hàm `set_seed(s)` đặt seed cho `random`, `numpy`, `torch`, `torch.cuda`.
-3. Tải dữ liệu: `fetch_covtype()`. Đổi nhãn `y - 1` để có `0..6`.
-4. **Chia dữ liệu bằng seed 42 cho mọi người**: 70% train / 15% val / 15% test, `stratify=y` (dùng `train_test_split` hai lần).
-5. **Chuẩn hoá:** chỉ 10 cột đầu (số liên tục). Lấy trung bình/độ lệch chuẩn **từ tập train**, áp dụng cho val và test. 44 cột nhị phân giữ nguyên.
-   - Vì sao chỉ dùng thống kê của train? (Gợi ý: rò rỉ thông tin.)
-6. Đưa toàn bộ `X_train, y_train, X_val, ...` lên GPU dưới dạng tensor một lần. **Không cần `DataLoader`**: tự xáo `torch.randperm(N)` mỗi epoch rồi cắt lô. Cách này nhanh hơn nhiều khi chạy nhiều cấu hình.
+**Hai tập, cố định cho mọi sinh viên** (xem `data/README.md`):
+
+| Tập | Số mẫu | Dùng để |
+|---|---|---|
+| `train` | 464 809 | huấn luyện; bạn tự tách một phần làm **validation** để chọn cấu hình và dừng sớm |
+| `eval` | 116 203 | **chỉ để chấm điểm cuối.** Không dùng để chọn lr, epoch, kiến trúc, kỹ thuật hay cách chuẩn hoá |
+
+Cả hai chia phân tầng theo nhãn bằng `data/split_metadata.csv` (seed 42). Bạn không tự chia lại tập train/eval.
+
+**Quy trình chuẩn:**
+1. Chạy `python scripts/split_data.py` để tạo `data/processed/train.npz` và `eval.npz`.
+2. Trong code, tách validation từ `train` (khuyến nghị 20%, phân tầng, seed 42). Chuẩn hoá bằng thống kê của phần train còn lại.
+3. Mọi thí nghiệm so sánh bằng **val** (val loss, val accuracy, val macro-F1).
+4. Chọn cấu hình cuối cùng **chỉ bằng val**. Huấn luyện/chọn epoch bằng val; sau đó dự đoán trên **toàn bộ eval** ở chế độ `eval()` (không dropout), ghi `predictions_eval.csv` (cột `row_id,pred`, nhãn 0..6).
+5. Chạy `python scripts/evaluate.py --pred predictions_eval.csv --out eval_result.json`. Script kiểm tra file hợp lệ rồi in accuracy, **macro-F1**, precision/recall/F1 từng lớp và ma trận nhầm lẫn. Giảng viên chấm bằng đúng script này.
+
+**Chỉ số:**
+- **macro-F1 (chỉ số chính):** trung bình cộng F1 của 7 lớp, mỗi lớp trọng số như nhau. Dữ liệu mất cân bằng nên lớp hiếm (nhãn 3 chỉ ~0,5%) ảnh hưởng ngang lớp lớn. Đoán luôn lớp đa số chỉ đạt ≈ 0,094.
+- **accuracy (phụ):** tỉ lệ dự đoán đúng; đoán luôn lớp đa số đạt 0,4876.
+- Công thức: `P_c = TP/(TP+FP)`, `R_c = TP/(TP+FN)`, `F1_c = 2·P_c·R_c/(P_c+R_c)` (bằng 0 nếu mẫu số bằng 0).
+
+**Mốc tham chiếu của giảng viên** (1 seed, một máy; `M-base`, 20 epoch, SGD+momentum hoặc Adam, lr khác nhau; kết quả trên eval):
+- 5 epoch, lr rất nhỏ: macro-F1 ≈ 0,57.
+- 20 epoch, lr vừa phải: ≈ 0,83 đến 0,87 (các cấu hình này chưa hội tụ hẳn, epoch tốt nhất đều là cuối).
+- mạng lớn hơn (3 lớp ẩn 512-256-128) + 40 epoch: ≈ 0,90.
+- Chênh lệch giữa val và eval nhỏ (≤ ~0,005 trong các lần chạy này), nên val là ước lượng đáng tin của eval.
+Mức điểm theo macro-F1 nằm trong `RUBRIC.md` (mục 7).
+
+**Phân tích lỗi (cũng được chấm):** nhìn F1 từng lớp và ma trận nhầm lẫn: lớp nào khó nhất, nhầm với lớp nào, vì sao (số mẫu, tương đồng đặc trưng).
+
+---
+
+## Code khung (pseudo-code) trong `code/`
+
+Thư mục `code/` có sẵn khung code: **mọi hàm chỉ có docstring, các bước gợi ý và `raise NotImplementedError`. Bạn phải tự hoàn thiện.**
+
+| File | Phần của bạn | Dùng ở |
+|---|---|---|
+| `data.py` | nạp train/eval, tách val, chuẩn hoá, đưa lên device, chia lô | Part 0 |
+| `model.py` | class `MLP`, khởi tạo, đếm tham số, thống kê kích hoạt | Part 1 |
+| `optimizer.py` | chọn bộ tối ưu (`torch.optim`), cắt gradient | Part 2–3 |
+| `train.py` | `evaluate`, `predict`, `run_experiment`, ghi `predictions_eval.csv` | Part 2–4 |
+| `plots.py` | ảnh từng thí nghiệm và ảnh chồng | Part 2–4 |
+| `results_table.py` | lưu JSON, điền `experiments.xlsx` | Part 4 |
+| `lab.ipynb` | notebook khung: các mục Part 0–4 với ô `# TODO` | tất cả |
+
+Bạn được đổi chữ ký hàm và thêm file nếu cần, miễn là sản phẩm nộp đúng README mục 6 và không còn `NotImplementedError`.
+
+---
+
+## Part 0 — Chuẩn bị dữ liệu
+
+Khung code: `code/data.py`.
+
+1. Bật GPU, in ra `torch.__version__` và tên GPU (`torch.cuda.get_device_name(0)`; trên Mac có thể dùng `mps`).
+2. Viết `set_seed(s)` đặt seed cho `random`, `numpy`, `torch`, `torch.cuda`.
+3. **Chia dữ liệu bằng metadata đã cho:** từ thư mục gốc repo chạy
+   ```bash
+   python scripts/split_data.py
+   ```
+   Script đọc `data/covtype.csv.gz` và `data/split_metadata.csv`, kiểm tra tính toàn vẹn, rồi tạo `data/processed/train.npz` (464 809 mẫu) và `data/processed/eval.npz` (116 203 mẫu). Nhãn đã được đổi về `0..6` kiểu `int64`; đặc trưng là `float32`. **Đừng sửa metadata.**
+4. **Tách validation từ train** (không đụng eval): 20% của train, phân tầng theo nhãn, seed 42 (`train_test_split(..., stratify=y, random_state=42)`). Dùng cùng cách tách cho mọi thí nghiệm.
+5. **Chuẩn hoá:** chỉ 10 cột đầu (số liên tục). Tính trung bình/độ lệch chuẩn **chỉ trên phần train còn lại** (sau khi tách val), áp dụng cho val và eval. 44 cột nhị phân giữ nguyên.
+   - Vì sao không được tính trên val hay eval? (Gợi ý: rò rỉ thông tin.)
+6. Đưa toàn bộ `X_tr, y_tr, X_val, y_val, X_eval, y_eval` lên GPU dưới dạng tensor một lần. **Không cần `DataLoader`**: tự xáo `torch.randperm(N)` mỗi epoch rồi cắt lô. Cách này nhanh hơn nhiều khi chạy nhiều cấu hình.
 
 **Tự kiểm tra Part 0:**
-- [ ] Kích thước 3 tập cộng lại = 581 012; tỉ lệ lớp ở 3 tập gần như bằng nhau.
-- [ ] Trung bình/độ lệch chuẩn của 10 cột số trên *train* ≈ 0 / 1.
-- [ ] In ra accuracy của chiến lược "luôn đoán lớp đa số" trên tập val. Đó là mốc thấp nhất mà mô hình phải vượt.
+- [ ] Kích thước: `train` = 464 809, `eval` = 116 203; sau khi tách val (20%) còn 371 847 mẫu train và 92 962 mẫu val.
+- [ ] Tỉ lệ lớp ở train, val, eval gần như bằng nhau.
+- [ ] Trung bình/độ lệch chuẩn của 10 cột số trên phần *train còn lại* ≈ 0 / 1.
+- [ ] In ra accuracy của chiến lược "luôn đoán lớp đa số" trên val (≈ 0,4876). Đó là mốc thấp nhất mà mô hình phải vượt.
+- [ ] Không có đoạn code nào đưa `X_eval` vào bước chuẩn hoá, chọn cấu hình hay dừng sớm.
 
 ---
 
 ## Part 1 — Định nghĩa model và kiểm tra "sức khoẻ" ban đầu
+
+Khung code: `code/model.py`.
 
 **Mục tiêu:** có một model đúng shape, đúng số tham số, và qua được các phép thử rẻ nhất của slide (Chương 5) *trước khi* huấn luyện lâu.
 
@@ -91,6 +153,8 @@ Sau một lần `loss.backward()`, in chuẩn gradient của từng tham số (`
 ---
 
 ## Part 2 — Pipeline huấn luyện và baseline
+
+Khung code: `code/train.py`, `code/optimizer.py`, `code/plots.py`.
 
 Bạn được dùng mọi thành phần PyTorch: `nn.init.*`, `torch.optim.*`, `clip_grad_norm_`, `autocast`, `GradScaler`, ... Phần bạn tự viết là pipeline.
 
@@ -204,7 +268,7 @@ Công thức (slide): `g ← g · min(1, c/‖g‖)` với `‖g‖` là chuẩn
 - Mạng 3 lớp có đủ sâu để thấy rõ khác biệt không? Nếu không, nêu nhận xét; hoặc (tuỳ chọn) thử mạng sâu hơn nhiều để thấy hiện tượng như slide.
 
 ### Kết hợp và cấu hình cuối cùng (tuỳ chọn)
-Nếu bạn muốn, kết hợp các kỹ thuật thấy có ích (chọn **theo val**) thành một cấu hình cuối cùng, chạy với 2–3 seed, rồi mới báo cáo **test accuracy và test macro-F1** cho baseline và cấu hình cuối cùng. Đây là lần duy nhất bạn nhìn tập test.
+Nếu bạn muốn, kết hợp các kỹ thuật thấy có ích (chọn **theo val**) thành một cấu hình cuối cùng và chạy với 2–3 seed. Việc chấm điểm trên tập **eval** (cho baseline và cấu hình cuối cùng) làm ở Part 4. Mục *Cải thiện so với baseline của chính bạn* trong RUBRIC xét hai cấu hình này.
 
 **Tự kiểm tra Part 3:**
 - [ ] Mỗi thí nghiệm đã chạy có ảnh riêng, có dòng trong bảng, có dự đoán trước và đối chiếu sau.
@@ -220,19 +284,32 @@ Mở [`templates/experiment_table_template.xlsx`](templates/experiment_table_tem
 - Sheet `Experiments`: mỗi lần chạy **một dòng**. Ô vàng là ô bạn điền; cột công thức (xám) tự tính. Thêm dòng tuỳ ý. Đừng đổi tên cột.
 - Sheet `Seeds`: ghi `exp_id` của các lần chạy baseline với seed khác nhau → tự tính trung bình, độ lệch chuẩn, ngưỡng nhiễu 2σ.
 - Sheet `Summary`: tự tổng hợp theo nhóm; bạn viết nhận xét ngắn.
-- **Tạo bảng bằng code:** ghi `results/*.json` rồi dùng `pandas` + `openpyxl` điền vào mẫu. Nhập tay nhiều dòng dễ sai.
+- Cột `eval_acc` / `eval_macro_f1` chỉ điền cho baseline và cấu hình cuối cùng, bằng số do `scripts/evaluate.py` in ra (không tự tính lại bằng cách khác).
+- **Tạo bảng bằng code** (khung `code/results_table.py`): ghi `results/*.json` rồi điền vào mẫu bằng `openpyxl`. Nhập tay nhiều dòng dễ sai.
 
-### 4b. Ảnh
-Mỗi `exp_id` một ảnh `figures/<exp_id>.png` (xem 2a). Mỗi nhóm nên có thêm một ảnh chồng các đường `compare_<nhóm>.png` để so sánh trực tiếp.
+### 4b. Đánh giá cuối trên eval (chỉ làm sau khi đã chọn cấu hình bằng val)
+1. Chọn cấu hình cuối cùng chỉ bằng val (có thể chính là baseline nếu bạn không kết hợp thêm gì). Nạp trọng số của **epoch có val loss thấp nhất**.
+2. Dự đoán trên **toàn bộ** `X_eval` ở chế độ `eval()` (không dropout), ghi `predictions_eval.csv` với hai cột `row_id,pred` (`pred` ∈ 0..6, đủ 116 203 dòng, mỗi `row_id` đúng một lần).
+3. Chạy
+   ```bash
+   python scripts/evaluate.py --pred submission_<MSSV>/predictions_eval.csv --out submission_<MSSV>/eval_result.json
+   ```
+   Nếu script báo "FILE DỰ ĐOÁN KHÔNG HỢP LỆ" thì sửa file theo thông báo (thiếu `row_id`, nhãn chưa trừ 1, ...).
+4. Ghi `accuracy` và `macro_f1` vào bảng và báo cáo. **Không chỉnh lại cấu hình vì thấy điểm eval chưa như ý** (làm vậy là dùng eval để chọn cấu hình, bị trừ điểm).
+5. **Phân tích lỗi:** từ F1 từng lớp và ma trận nhầm lẫn trong `eval_result.json`, nêu lớp khó nhất, nó hay bị nhầm với lớp nào và vì sao.
+6. Để có độ nhiễu của điểm eval, bạn có thể chạy cấu hình cuối cùng với vài seed và báo cáo trung bình ± độ lệch chuẩn. File nộp là dự đoán của **một** mô hình (bạn nêu rõ seed nào).
 
-### 4c. Báo cáo `REPORT.md`
+### 4c. Ảnh
+Mỗi `exp_id` một ảnh `figures/<exp_id>.png` (xem 2a, khung `code/plots.py`). Mỗi nhóm nên có thêm một ảnh chồng các đường `compare_<nhóm>.png` để so sánh trực tiếp.
+
+### 4d. Báo cáo `REPORT.md`
 Dùng [`templates/REPORT_TEMPLATE.md`](templates/REPORT_TEMPLATE.md), tối đa ~4 trang. Chỉ viết cho các chủ đề bạn đã thử. Mỗi kết luận phải có: **con số (trỏ về `exp_id`) + ảnh + giải thích cơ chế**. Ví dụ mức độ mong đợi:
 
 > "Adam (lr = X) đạt val macro-F1 cao hơn SGD+momentum (`opt-sgdm-…`) Y điểm, lớn hơn 2σ_seed = Z, nên khác biệt có ý nghĩa. Đường val-loss của Adam xuống nhanh hơn ở 3 epoch đầu (hình `compare_optimizer.png`), phù hợp với việc Adam chia bước theo độ lớn gradient của từng tham số."
 
 Không chấp nhận: "Adam tốt hơn." (không có số, không so với nhiễu, không có cơ chế).
 
-### 4d. Đóng gói
+### 4e. Đóng gói
 - Notebook phải **chạy lại được từ đầu đến cuối** (Restart & Run All) trên Colab/Kaggle. Seed cố định. Output còn lại trong file.
 - Cấu trúc thư mục nộp đúng như README, mục 6 (danh sách chi tiết từng file). **Mọi code nằm trong `code/`.**
 
@@ -240,7 +317,9 @@ Không chấp nhận: "Adam tốt hơn." (không có số, không so với nhi�
 - [ ] `experiments.xlsx` mở được, không có ô công thức lỗi, các dòng đã điền đủ cột (hoặc ghi lý do thiếu ở `notes`).
 - [ ] Số ảnh `figures/<exp_id>.png` = số dòng trong bảng.
 - [ ] Báo cáo trả lời các câu hỏi dẫn dắt cho những chủ đề bạn đã thử.
-- [ ] Test chỉ xuất hiện ở baseline và cấu hình cuối cùng.
+- [ ] `predictions_eval.csv` qua được `scripts/evaluate.py`; `eval_result.json` có trong thư mục nộp; điểm trong bảng và báo cáo khớp `eval_result.json`.
+- [ ] Điểm eval chỉ xuất hiện ở baseline và cấu hình cuối cùng.
+- [ ] Không còn `NotImplementedError` trong `code/`.
 
 ---
 

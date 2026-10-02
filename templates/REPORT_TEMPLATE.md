@@ -5,9 +5,9 @@
 ## 1. Thiết lập
 
 - Môi trường (Colab/Kaggle, GPU, phiên bản PyTorch):
-- Dữ liệu: Forest CoverType, chia 70/15/15 (seed 42).
+- Dữ liệu: Forest CoverType; `train` 464 809 / `eval` 116 203 theo `split_metadata.csv`. Validation: 20% của train (phân tầng, seed 42) → 371 847 train / 92 962 val.
 - Model: `M-base` (54→256→128→7, 47 879 tham số). Baseline: loss, optimizer, lr, batch, epochs, init.
-- Mốc tham chiếu: accuracy "đoán lớp đa số" trên val = ___ %.
+- Mốc tham chiếu: accuracy "đoán lớp đa số" trên val = ___ (≈ 0,4876).
 - Các chủ đề đã thử: ☐ loss ☐ optimizer ☐ hyper-parameter ☐ dropout ☐ clipping ☐ mixed precision ☐ init
 
 ## 2. Kiểm tra ban đầu và độ nhiễu
@@ -26,7 +26,7 @@
 
 ## 3. Kết quả theo chủ đề
 
-> Mỗi chủ đề đã thử: (a) dự đoán trước khi chạy, (b) kết quả (số + ảnh + `exp_id`), (c) giải thích cơ chế, (d) khác biệt có vượt nhiễu không.
+> Mỗi chủ đề đã thử: (a) dự đoán trước khi chạy, (b) kết quả (số + ảnh + `exp_id`), (c) giải thích cơ chế, (d) khác biệt có vượt nhiễu không. Tất cả dựa trên **val**, không dựa trên eval.
 
 ### 3.1 Hàm mất mát — CE vs MSE
 - Dự đoán:
@@ -57,15 +57,33 @@
 - Độ lệch chuẩn kích hoạt theo lớp và loss bước 0 của các cách khởi tạo.
 - Giải thích vì sao `zeros` (và `normal` nếu có) cho kết quả như vậy.
 
-## 4. Cấu hình cuối cùng và kết quả trên test (nếu có)
+## 4. Đánh giá cuối trên tập eval
 
-| Cấu hình | Số seed | val macro-F1 | test accuracy | test macro-F1 |
+> Chỉ làm sau khi chọn cấu hình bằng val. Số lấy từ `eval_result.json` (do `scripts/evaluate.py` tạo), không tự tính lại.
+
+| Cấu hình | Seed nộp | val macro-F1 | **eval macro-F1** | eval accuracy |
 |---|---|---|---|---|
 | Baseline | | | | |
 | Cấu hình cuối cùng | | | | |
 
 - Cấu hình cuối cùng gồm những gì và vì sao (chọn dựa trên val)?
-- Cải thiện so với baseline có vượt nhiễu không?
+- Cải thiện so với baseline trên eval có vượt nhiễu không? (nếu chạy nhiều seed: trung bình ± σ của eval macro-F1)
+- Val và eval có gần nhau không? Nếu lệch nhiều, nghĩ vì sao.
+
+### 4.1 Phân tích lỗi theo lớp
+
+| Lớp | support | precision | recall | F1 |
+|---|---|---|---|---|
+| 0 | | | | |
+| 1 | | | | |
+| 2 | | | | |
+| 3 | | | | |
+| 4 | | | | |
+| 5 | | | | |
+| 6 | | | | |
+
+- Lớp khó nhất là lớp ___ (F1 = ___). Nó hay bị nhầm với lớp ___ (xem ma trận nhầm lẫn; chèn ảnh nếu có).
+- Lý giải (số mẫu ít? đặc trưng giống lớp khác? mất cân bằng?) và một cách cải thiện bạn sẽ thử.
 
 ## 5. Trả lời các câu hỏi dẫn dắt
 

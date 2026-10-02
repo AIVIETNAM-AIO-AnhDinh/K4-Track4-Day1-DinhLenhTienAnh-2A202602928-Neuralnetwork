@@ -3,4 +3,7 @@ __pycache__/
 *.pyc
 .DS_Store
 sk_data/
-data/
+data/processed/
+*.pt
+*.pth
+*.ckpt
