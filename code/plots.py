@@ -6,6 +6,8 @@ Khi notebook chạy trong code/, lưu vào "../figures/" (ví dụ path = f"../f
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import FormatStrFormatter, LogLocator, MaxNLocator, NullFormatter
 
 
 def plot_run(result: dict, path: str) -> None:

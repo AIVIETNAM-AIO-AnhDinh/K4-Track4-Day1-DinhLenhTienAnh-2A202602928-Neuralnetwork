@@ -7,6 +7,7 @@ Mọi chỉ số (loss, accuracy, macro-F1) dùng cùng định nghĩa với scr
 """
 from __future__ import annotations
 
+import random
 import time
 
 import numpy as np
@@ -31,10 +32,16 @@ DEFAULT_CFG = dict(
     seed=1,
 )
 
+N_CLASSES = 7
+
 
 def set_seed(seed: int) -> None:
     """Đặt seed cho random, numpy, torch (và torch.cuda nếu có)."""
-    raise NotImplementedError  # TODO
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)            # seed CPU, và cả CUDA/MPS
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def macro_f1_from_confusion(cm: np.ndarray) -> float:
@@ -42,7 +49,14 @@ def macro_f1_from_confusion(cm: np.ndarray) -> float:
 
     cm: ma trận nhầm lẫn (7, 7), hàng = nhãn thật, cột = dự đoán.
     """
-    raise NotImplementedError  # TODO
+    cm = np.asarray(cm, dtype=np.float64)
+    tp = np.diag(cm)
+    fp, fn = cm.sum(0) - tp, cm.sum(1) - tp
+    zeros = np.zeros_like(tp)
+    prec = np.divide(tp, tp + fp, out=zeros.copy(), where=(tp + fp) > 0)
+    rec = np.divide(tp, tp + fn, out=zeros.copy(), where=(tp + fn) > 0)
+    f1 = np.divide(2 * prec * rec, prec + rec, out=zeros.copy(), where=(prec + rec) > 0)
+    return float(f1.mean())
 
 
 @torch.no_grad()

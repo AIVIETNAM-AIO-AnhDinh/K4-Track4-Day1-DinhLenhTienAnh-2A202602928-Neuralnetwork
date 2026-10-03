@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 import torch
+from sklearn.model_selection import train_test_split
 
 N_NUMERIC = 10  # số cột liên tục cần chuẩn hoá (cột 0..9)
 
@@ -26,7 +27,16 @@ def load_split(processed_dir: str = "data/processed"):
       2. np.load(f"{processed_dir}/eval.npz")  -> khoá "X", "y", "row_id"
       3. assert shape/dtype đúng quy ước ở đầu file
     """
-    raise NotImplementedError  # TODO
+    tr = np.load(f"{processed_dir}/train.npz")
+    ev = np.load(f"{processed_dir}/eval.npz")
+    X_train_full, y_train_full = tr["X"], tr["y"]
+    X_eval, y_eval, eval_row_id = ev["X"], ev["y"], ev["row_id"]
+    for X, y in ((X_train_full, y_train_full), (X_eval, y_eval)):
+        assert X.ndim == 2 and X.shape[1] == 54 and X.dtype == np.float32, (X.shape, X.dtype)
+        assert y.shape == (len(X),) and y.dtype == np.int64, (y.shape, y.dtype)
+        assert y.min() >= 0 and y.max() <= 6, "nhãn phải là 0..6"
+    assert len(eval_row_id) == len(X_eval)
+    return X_train_full, y_train_full, X_eval, y_eval, eval_row_id
 
 
 def make_val_split(X, y, val_fraction: float = 0.2, seed: int = 42):
@@ -36,7 +46,9 @@ def make_val_split(X, y, val_fraction: float = 0.2, seed: int = 42):
     Gợi ý: sklearn.model_selection.train_test_split(..., stratify=y, random_state=seed)
     Dùng CÙNG seed và val_fraction cho mọi thí nghiệm để so sánh công bằng.
     """
-    raise NotImplementedError  # TODO
+    X_tr, X_val, y_tr, y_val = train_test_split(
+        X, y, test_size=val_fraction, stratify=y, random_state=seed)
+    return X_tr, y_tr, X_val, y_val
 
 
 def fit_standardizer(X_tr):
@@ -45,7 +57,10 @@ def fit_standardizer(X_tr):
     Trả về: mean (shape (10,)), std (shape (10,))
     Câu hỏi: vì sao không được tính trên toàn bộ dữ liệu hay trên eval?
     """
-    raise NotImplementedError  # TODO
+    # Chỉ dùng phần train còn lại: val/eval đóng vai "dữ liệu chưa thấy"; dùng thống kê của chúng
+    # để chuẩn hoá là rò rỉ thông tin từ tập đánh giá vào bước tiền xử lý.
+    num = X_tr[:, :N_NUMERIC].astype(np.float64)
+    return num.mean(axis=0), num.std(axis=0)
 
 
 def apply_standardizer(X, mean, std):
@@ -53,7 +68,10 @@ def apply_standardizer(X, mean, std):
 
     Chú ý: không sửa X tại chỗ nếu bạn còn dùng lại nó; chú ý std = 0 (nếu có).
     """
-    raise NotImplementedError  # TODO
+    std = np.where(std > 0, std, 1.0)   # cột hằng: chỉ trừ mean, tránh chia 0
+    X = X.copy()
+    X[:, :N_NUMERIC] = ((X[:, :N_NUMERIC] - mean) / std).astype(np.float32)
+    return X
 
 
 def prepare_data(device: str, val_fraction: float = 0.2, seed: int = 42,
@@ -69,7 +87,26 @@ def prepare_data(device: str, val_fraction: float = 0.2, seed: int = 42,
       3. torch.tensor(..., device=device); X là float32, y là int64
       4. in ra kích thước các tập và accuracy của chiến lược "luôn đoán lớp đa số" trên val
     """
-    raise NotImplementedError  # TODO
+    X_full, y_full, X_eval, y_eval, eval_row_id = load_split(processed_dir)
+    X_tr, y_tr, X_val, y_val = make_val_split(X_full, y_full, val_fraction, seed)
+    mean, std = fit_standardizer(X_tr)
+    X_tr, X_val, X_eval = (apply_standardizer(X, mean, std) for X in (X_tr, X_val, X_eval))
+
+    def to_dev(X, y):
+        return (torch.tensor(X, dtype=torch.float32, device=device),
+                torch.tensor(y, dtype=torch.int64, device=device))
+
+    data = {}
+    data["X_tr"], data["y_tr"] = to_dev(X_tr, y_tr)
+    data["X_val"], data["y_val"] = to_dev(X_val, y_val)
+    data["X_eval"], data["y_eval"] = to_dev(X_eval, y_eval)
+    data["eval_row_id"] = eval_row_id
+    data["mean"], data["std"] = mean, std
+
+    majority = np.bincount(y_tr, minlength=7).argmax()   # lớp đa số xác định trên train
+    print(f"train {len(X_tr):,} | val {len(X_val):,} | eval {len(X_eval):,}  (device={device})")
+    print(f'"luôn đoán lớp {majority}" trên val: accuracy = {(y_val == majority).mean():.4f}')
+    return data
 
 
 def iterate_batches(X, y, batch_size: int, generator: torch.Generator | None = None, shuffle: bool = True):
@@ -80,4 +117,14 @@ def iterate_batches(X, y, batch_size: int, generator: torch.Generator | None = N
       2. for i in range(0, N, batch_size): idx = perm[i:i+batch_size]; yield X[idx], y[idx]
     Chú ý: batch cuối có thể nhỏ hơn batch_size; hãy quyết định bạn xử lý thế nào và ghi lại.
     """
-    raise NotImplementedError  # TODO
+    # Hoán vị sinh trên CPU (generator CPU) rồi chuyển sang device: cùng seed -> cùng thứ tự lô
+    # trên cpu/cuda/mps. Lô cuối nhỏ hơn batch_size được GIỮ LẠI (không drop_last), để mỗi epoch
+    # dùng đủ mọi mẫu train; F.cross_entropy lấy trung bình trong lô nên lô nhỏ không làm lệch thang loss.
+    N = len(X)
+    if shuffle:
+        perm = torch.randperm(N, generator=generator).to(X.device)
+    else:
+        perm = torch.arange(N, device=X.device)
+    for i in range(0, N, batch_size):
+        idx = perm[i:i + batch_size]
+        yield X[idx], y[idx]
