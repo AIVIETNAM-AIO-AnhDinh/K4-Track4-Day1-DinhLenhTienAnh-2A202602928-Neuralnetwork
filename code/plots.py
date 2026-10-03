@@ -94,3 +94,36 @@ def plot_compare(results: list[dict], metric: str | list[str], path: str, title:
     fig.tight_layout()
     fig.savefig(path, dpi=120, bbox_inches="tight")
     plt.close(fig)
+
+
+def plot_lr_sensitivity(sweeps: dict, path: str, seed_runs: dict | None = None, title: str = "") -> None:
+    """Độ nhạy với lr: mỗi bộ tối ưu một đường, trục x = lr (log).
+         ô trái : val macro-F1 tại best_epoch;  ô phải: best val loss.
+    sweeps   : {nhãn: [result, ...]}  (các lần quét lr, cùng seed)
+    seed_runs: {nhãn: [result, ...]}  (tuỳ chọn: nhiều seed ở lr tốt nhất -> vẽ thanh trung bình ± std)
+    Lần chạy phân kỳ (không có best_epoch) được đánh dấu x ở đáy ô.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.6))
+    for ax, key, ylabel in ((axes[0], "val_macro_f1", "val macro-F1 (tại best epoch)"),
+                            (axes[1], "best_val_loss", "best val loss")):
+        for i, (label, runs) in enumerate(sweeps.items()):
+            color = f"C{i}"
+            runs = sorted(runs, key=lambda r: r["cfg"]["lr"])
+            ok = [r for r in runs if r["summary"].get(key) is not None]
+            ax.plot([r["cfg"]["lr"] for r in ok], [r["summary"][key] for r in ok], "o-", color=color, label=label)
+            for r in runs:
+                if r["summary"].get(key) is None:
+                    ax.plot(r["cfg"]["lr"], 0, "x", color=color, ms=10, transform=ax.get_xaxis_transform(), clip_on=False)
+            if seed_runs and label in seed_runs:
+                v = np.array([r["summary"][key] for r in seed_runs[label]])
+                ax.errorbar(seed_runs[label][0]["cfg"]["lr"], v.mean(), yerr=v.std(ddof=1), fmt="s", color=color,
+                            ms=7, capsize=5, mfc="white", label=f"{label}: TB ± std {len(v)} seed")
+        ax.set_xscale("log")
+        ax.set(xlabel="lr (thang log)", ylabel=ylabel, title=ylabel)
+        ax.grid(alpha=0.3, which="both")
+    handles, labels = axes[0].get_legend_handles_labels()   # một chú thích chung bên dưới, không che đường
+    fig.legend(handles, labels, loc="lower center", ncol=4, fontsize=8, bbox_to_anchor=(0.5, -0.1))
+    fig.suptitle(title, fontsize=11)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120, bbox_inches="tight")
+    plt.close(fig)
