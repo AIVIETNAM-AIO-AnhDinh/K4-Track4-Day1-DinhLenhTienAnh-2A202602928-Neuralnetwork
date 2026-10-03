@@ -65,7 +65,8 @@ def predict(model, X, batch_size: int = 8192) -> torch.Tensor:
 
     Các bước: model.eval(); duyệt X theo từng lô (không cần xáo); gom argmax(dim=1); torch.cat.
     """
-    raise NotImplementedError  # TODO
+    model.eval()
+    return torch.cat([model(X[i:i + batch_size]).argmax(dim=1) for i in range(0, len(X), batch_size)])
 
 
 @torch.no_grad()
@@ -79,14 +80,35 @@ def evaluate(model, X, y, loss_name: str = "ce", batch_size: int = 8192) -> dict
       4. dựng ma trận nhầm lẫn 7x7 -> macro_f1_from_confusion
     Dùng hàm này cho: train loss (trên toàn bộ hoặc một tập con CỐ ĐỊNH của train), val, và eval cuối cùng.
     """
-    raise NotImplementedError  # TODO
+    model.eval()
+    total = torch.zeros((), device=X.device)
+    cm = torch.zeros(N_CLASSES * N_CLASSES, dtype=torch.int64, device=X.device)
+    for i in range(0, len(X), batch_size):
+        xb, yb = X[i:i + batch_size], y[i:i + batch_size]
+        logits = model(xb)
+        total += compute_loss(logits, yb, loss_name, reduction="sum")
+        # ô (thật, đoán) của ma trận nhầm lẫn đánh số phẳng thật*7 + đoán
+        cm += torch.bincount(yb * N_CLASSES + logits.argmax(dim=1), minlength=N_CLASSES * N_CLASSES)
+    cm = cm.reshape(N_CLASSES, N_CLASSES).cpu().numpy()
+    return dict(loss=total.item() / len(X), acc=float(np.trace(cm) / cm.sum()),
+                macro_f1=macro_f1_from_confusion(cm))
 
 
-def compute_loss(logits, y, loss_name: str):
+def compute_loss(logits, y, loss_name: str, reduction: str = "mean"):
     """"ce"  : cross-entropy nhận logit thô và nhãn int64 (F.cross_entropy).
        "mse" : MSE giữa logit và one-hot của y (ghi rõ bạn lấy trung bình thế nào).
     """
-    raise NotImplementedError  # TODO
+    # Loss luôn tính ở FP32 (kể cả khi forward chạy trong autocast) để tránh tràn số ở FP16.
+    logits = logits.float()
+    if loss_name == "ce":
+        return F.cross_entropy(logits, y, reduction=reduction)
+    if loss_name == "mse":
+        # Giống nn.MSELoss(): (logit - one_hot)^2 lấy trung bình trên cả 7 lớp và trên lô, không có hệ số 1/2.
+        # Ở đây: trung bình theo 7 lớp cho từng mẫu, rồi mean/sum theo mẫu (để evaluate cộng dồn được).
+        target = F.one_hot(y, logits.shape[1]).float()
+        per_sample = F.mse_loss(logits, target, reduction="none").mean(dim=1)
+        return per_sample.mean() if reduction == "mean" else per_sample.sum()
+    raise ValueError(f"loss phải là 'ce' hoặc 'mse', nhận {loss_name!r}")
 
 
 def run_experiment(cfg: dict, data: dict) -> dict:
