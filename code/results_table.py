@@ -17,15 +17,33 @@ import math
 from pathlib import Path
 
 
+def _jsonable(obj):
+    """tuple -> list, NaN/inf (lần chạy phân kỳ) -> None, để file là JSON chuẩn."""
+    if isinstance(obj, dict):
+        return {k: _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj
+
+
 def save_result(result: dict, results_dir: str = "../results") -> str:
     """Ghi result["cfg"], result["history"], result["summary"] (KHÔNG ghi best_state) ra
     <results_dir>/<exp_id>.json. Trả về đường dẫn file. Tạo thư mục nếu chưa có."""
-    raise NotImplementedError  # TODO
+    exp_id = result["cfg"]["exp_id"]
+    out = Path(results_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{exp_id}.json"
+    payload = {k: result[k] for k in ("cfg", "history", "summary")}   # best_state không ghi (trọng số)
+    path.write_text(json.dumps(_jsonable(payload), indent=1, ensure_ascii=False, allow_nan=False))
+    return str(path)
 
 
 def load_results(results_dir: str = "../results") -> list[dict]:
     """Đọc mọi file *.json trong results_dir, trả về danh sách dict (sắp theo exp_id)."""
-    raise NotImplementedError  # TODO
+    return sorted((json.loads(p.read_text()) for p in Path(results_dir).glob("*.json")),
+                  key=lambda r: r["cfg"]["exp_id"])
 
 
 def to_row(result: dict, eval_scores: dict | None = None, notes: str = "") -> dict:

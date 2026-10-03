@@ -44,7 +44,12 @@ def build_scheduler(optimizer, name: str | None, total_steps: int, **kwargs):
 
     Trả về None nếu name là None. Nếu bạn dùng scheduler ở một thí nghiệm, hãy ghi vào bảng (cột notes).
     """
-    raise NotImplementedError  # TODO
+    # Scheduler được gọi .step() sau MỖI bước cập nhật, nên T_max tính theo số bước, không theo epoch.
+    if name is None:
+        return None
+    if name == "cosine":
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps, **kwargs)
+    raise ValueError(f"scheduler không hỗ trợ: {name!r}")
 
 
 def clip_gradients(params, max_norm: float | None) -> float:
